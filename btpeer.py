@@ -56,6 +56,7 @@ class BTPeer:
 
         self.handlers: dict[str, callable] = {}   # 4-char msgtype → handler
         self.router: callable | None = None       # routing callback
+        self.router = lambda pid: (pid, *self.peers.get(pid, (None, None))) #当 peers 表里有目标 pid 时就能“直连”；没有的话返回 (None, None, None)
 
     # ----------------------------------------------------------------------- #
     # Internal helpers

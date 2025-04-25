@@ -1,40 +1,53 @@
-# peer.py
 import sys
 import threading
 from btpeer import BTPeer, BTPeerConnection
 
-# ---------------- handler 回调 ----------------
-def ping_handler(conn: BTPeerConnection, _):
-    """收到 PING 就回 PONG"""
-    print(f"[{peer.myid}] got PING from {conn.id}")
-    conn.senddata("PONG", "")
+# ---------------- handler callback ----------------
+def ping_handler(conn: BTPeerConnection, msgdata: str):
+    """Reply with PONG when receiving PING."""
+    sender_id = msgdata or conn.id
+    if conn.id is None:
+        conn.id = sender_id            # cache the sender's identity
+    print(f"[{peer.myid}] got PING from {sender_id}")
+    conn.senddata("PONG", peer.myid)   # respond with my identity
 
-def pong_handler(_, __):
-    print(f"[{peer.myid}] got PONG")
+def pong_handler(conn: BTPeerConnection, msgdata: str):
+    sender_id = msgdata or conn.id
+    print(f"[{peer.myid}] got PONG from {sender_id}")
 
-# ---------------- 创建 peer ----------------
+# ---------------- create peer ----------------
 if len(sys.argv) != 3:
-    print("用法: python peer.py <port> <maxpeers>")
+    print("Usage: python peer.py <port> <maxpeers>")
     sys.exit(1)
 
 port, maxpeers = map(int, sys.argv[1:3])
 peer = BTPeer(maxpeers=maxpeers, serverport=port)
 
+# Direct router function and registration
+def direct_router(pid: str):
+    try:
+        host, port = peer.get_peer(pid)
+        return (pid, host, port)
+    except KeyError:
+        return (None, None, None)
+
+peer.add_router(direct_router)
+
 peer.add_handler("PING", ping_handler)
 peer.add_handler("PONG", pong_handler)
 
-# 可选：定时打印存活 peer 列表
+# Optional: Periodically print the list of live peers
 def heartbeat():
     peer.check_live_peers()
     print(f"### [{peer.myid}] known peers:", peer.get_peer_ids())
 
-peer.start_stabilizer(heartbeat, delay=10)  # 每 10 秒跑一次
+#peer.start_stabilizer(heartbeat, delay=120)  # Run every 10 seconds
 
-# ---------------- 背景线程跑 mainloop ----------------
+# ---------------- Run mainloop in background thread ----------------
 t = threading.Thread(target=peer.mainloop, daemon=True)
 t.start()
 
-# ---------------- 简易 CLI ----------------
+# ---------------- Simple CLI ----------------
 while True:
     cmd = input("cmd> ").strip().split()
     if not cmd:
@@ -43,11 +56,14 @@ while True:
         _, pid, host, p = cmd
         peer.add_peer(pid, host, int(p))
     elif cmd[0] == "ping" and len(cmd) == 2:
-        peer.send_to_peer(cmd[1], "PING", "", waitreply=True)
+        peer.send_to_peer(cmd[1], "PING", peer.myid, waitreply=True)
     elif cmd[0] == "list":
         print(peer.get_peer_ids())
     elif cmd[0] == "quit":
         peer.shutdown = True
         break
+    elif cmd[0] == "heartbeat":
+        peer.check_live_peers()
+        print(f"### [{peer.myid}] known peers:", peer.get_peer_ids()) 
     else:
-        print("命令: add <peerid> <host> <port> | ping <peerid> | list | quit")
+        print("Commands: add <peerid> <host> <port> | ping <peerid> | list | quit")

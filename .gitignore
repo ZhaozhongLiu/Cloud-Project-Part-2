@@ -1,0 +1,72 @@
+# ---------- Python byte-code ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyo
+*.pyd
+*.pdb          # Windows debug symbols
+
+# ---------- Virtual environments ----------
+.venv/
+venv/
+env/
+ENV/
+
+# ---------- Build & distribution artifacts ----------
+build/
+dist/
+*.egg-info/
+.eggs/
+*.wheel
+pip-wheel-metadata/
+
+# ---------- Test & type-checking caches ----------
+.mypy_cache/
+.pytest_cache/
+.tox/
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# ---------- Logs & local runtime data ----------
+*.log
+logs/
+*.sqlite3
+*.db
+*.pid
+
+# ---------- Secrets / config ----------
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# ---------- Editor / IDE settings ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---------- OS-specific cruft ----------
+.DS_Store
+Thumbs.db
+Icon?
+ehthumbs.db
+desktop.ini
+
+# ---------- Optional extras ----------
+# Unit-test output
+junit-*.xml
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Local tool history (e.g., VS Code “Local History” extension)
+.history/

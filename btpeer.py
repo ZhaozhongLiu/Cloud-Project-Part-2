@@ -31,6 +31,7 @@ class BTPeer:
         self,
         maxpeers: int,
         serverport: int,
+        peertype: str,
         myid: str | None = None,
         serverhost: str | None = None,
     ):
@@ -47,11 +48,13 @@ class BTPeer:
         self.maxpeers = int(maxpeers)
         self.serverport = int(serverport)
 
+        self.peertype = peertype
+
         self.serverhost = serverhost or self._init_server_host()
         self.myid = myid or f"{self.serverhost}:{self.serverport}"
 
         self.peerlock = threading.Lock()          # protects self.peers
-        self.peers: dict[str, tuple[str, int]] = {}  # peerid → (host, port)
+        self.peers: dict[str, tuple[str, int, str]] = {}  # peerid → (host, port, peertype)
         self.shutdown: bool = False
 
         self.handlers: dict[str, callable] = {}   # 4-char msgtype → handler
@@ -135,17 +138,17 @@ class BTPeer:
     # ----------------------------------------------------------------------- #
     # Peer list maintenance
     # ----------------------------------------------------------------------- #
-    def add_peer(self, peerid: str, host: str, port: int) -> bool:
+    def add_peer(self, peerid: str, host: str, port: int, peertype: str) -> bool:
         """Add a peer to known list (respects *maxpeers*)."""
         if peerid in self.peers:
             return False
         if self.maxpeers and len(self.peers) >= self.maxpeers:
             return False
 
-        self.peers[peerid] = (host, int(port))
+        self.peers[peerid] = (host, int(port), peertype.upper())
         return True
 
-    def get_peer(self, peerid: str) -> tuple[str, int]:
+    def get_peer(self, peerid: str) -> tuple[str, int, str]:
         return self.peers[peerid]
 
     def remove_peer(self, peerid: str) -> None:

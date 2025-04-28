@@ -1,40 +1,29 @@
 import sys
 import threading
 from btpeer import BTPeer, BTPeerConnection
-
-# ---------------- handler callback ----------------
-def ping_handler(conn: BTPeerConnection, msgdata: str):
-    """Reply with PONG when receiving PING."""
-    sender_id = msgdata or conn.id
-    if conn.id is None:
-        conn.id = sender_id            # cache the sender's identity
-    print(f"[{peer.myid}] got PING from {sender_id}")
-    conn.senddata("PONG", peer.myid)   # respond with my identity
-
-def pong_handler(conn: BTPeerConnection, msgdata: str):
-    sender_id = msgdata or conn.id
-    print(f"[{peer.myid}] got PONG from {sender_id}")
+from handlers import ml_handlers, iot_handlers, bc_handlers
 
 # ---------------- create peer ----------------
-if len(sys.argv) != 3:
-    print("Usage: python peer.py <port> <maxpeers>")
+if len(sys.argv) != 4:
+    print("Usage: python peer.py <port> <maxpeers> <peertype>")
     sys.exit(1)
 
-port, maxpeers = map(int, sys.argv[1:3])
-peer = BTPeer(maxpeers=maxpeers, serverport=port)
+port, maxpeers, peertype = sys.argv[1], sys.argv[2], sys.argv[3]
+peer = BTPeer(maxpeers=int(maxpeers), serverport=int(port), peertype=peertype.upper())
 
 # Direct router function and registration
 def direct_router(pid: str):
     try:
-        host, port = peer.get_peer(pid)
+        host, port, peertype = peer.get_peer(pid)
         return (pid, host, port)
     except KeyError:
         return (None, None, None)
 
 peer.add_router(direct_router)
 
-peer.add_handler("PING", ping_handler)
-peer.add_handler("PONG", pong_handler)
+if peer.peertype == "IOT":
+    peer.add_handler("IORQ", lambda conn, msgdata: iot_handlers.iot_request_handler(peer, conn, msgdata))
+    threading.Thread(target=iot_handlers.start_aws_iot_listener, daemon=True).start()
 
 # Optional: Periodically print the list of live peers
 def heartbeat():
@@ -48,22 +37,59 @@ t = threading.Thread(target=peer.mainloop, daemon=True)
 t.start()
 
 # ---------------- Simple CLI ----------------
+def get_peer_by_service(service_type):
+    for pid, (host, port, ptype) in peer.peers.items():
+        if ptype == service_type.upper():
+            return pid
+    return None
+
 while True:
     cmd = input("cmd> ").strip().split()
     if not cmd:
         continue
-    if cmd[0] == "add" and len(cmd) == 4:
-        _, pid, host, p = cmd
-        peer.add_peer(pid, host, int(p))
+    if cmd[0] == "add" and len(cmd) == 5:
+        _, pid, host, p, ptype = cmd
+        peer.add_peer(pid, host, int(p), ptype)
     elif cmd[0] == "ping" and len(cmd) == 2:
-        peer.send_to_peer(cmd[1], "PING", peer.myid, waitreply=True)
+        replies = peer.send_to_peer(cmd[1], "PING", peer.myid, waitreply=True)
+        # print("Replies:", replies)
     elif cmd[0] == "list":
-        print(peer.get_peer_ids())
+        for pid, (host, port, ptype) in peer.peers.items():
+            print(f"{pid} @ {host}:{port} [{ptype}]")
     elif cmd[0] == "quit":
         peer.shutdown = True
         break
     elif cmd[0] == "heartbeat":
         peer.check_live_peers()
-        print(f"### [{peer.myid}] known peers:", peer.get_peer_ids()) 
+        print(f"### [{peer.myid}] known peers:", peer.get_peer_ids())
+    elif cmd[0] == "request_ml":
+        target_peer = get_peer_by_service("ML")
+        if target_peer:
+            print(f"Sending ML request to {target_peer}")
+            peer.send_to_peer(target_peer, "MLRQ", "example-ml-data", waitreply=True)
+        else:
+            print("No known ML peer found.")
+
+    elif cmd[0] == "request_iot" and len(cmd) == 3:
+        target_peer = get_peer_by_service("IOT")
+        if target_peer:
+            time_range = f"{cmd[1]}|{cmd[2]}"
+            print(f"Requesting IoT data from {target_peer} for {time_range}")
+            replies = peer.send_to_peer(target_peer, "IORQ", time_range, waitreply=True)
+            for msgtype, msgdata in replies:
+                if msgtype == "IORS":
+                    iot_handlers.iot_response_handler(peer, msgdata)
+                else:
+                    print(f"Unknown reply type: {msgtype}")
+        else:
+            print("No known IoT peer found.")
+
+    elif cmd[0] == "request_bc":
+        target_peer = get_peer_by_service("BC")
+        if target_peer:
+            print(f"Sending Blockchain request to {target_peer}")
+            peer.send_to_peer(target_peer, "BCRQ", "example-bc-data", waitreply=True)
+        else:
+            print("No known Blockchain peer found.")
     else:
-        print("Commands: add <peerid> <host> <port> | ping <peerid> | list | quit")
+        print("Commands: add <peerid> <host> <port> <peertype> | ping <peerid> | list | quit")

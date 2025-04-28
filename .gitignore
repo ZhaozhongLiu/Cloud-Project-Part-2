@@ -70,3 +70,7 @@ junit-*.xml
 
 # Local tool history (e.g., VS Code “Local History” extension)
 .history/
+
+root-CA.crt
+vibration_sensor.cert.pem
+vibration_sensor.private.key

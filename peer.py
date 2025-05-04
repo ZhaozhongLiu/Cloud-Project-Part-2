@@ -4,6 +4,9 @@ from btpeer import BTPeer, BTPeerConnection
 from handlers import ml_handlers, iot_handlers, bc_handlers
 import base64
 
+from google.cloud import storage
+import os
+
 # ---------------- create peer ----------------
 if len(sys.argv) != 4:
     print("Usage: python peer.py <port> <maxpeers> <peertype>")
@@ -47,6 +50,28 @@ def get_peer_by_service(service_type):
             return pid
     return None
 
+def upload_video_to_bucket(bucket_name, source_file_path):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob_name = os.path.basename(source_file_path)
+    blob = bucket.blob(blob_name)
+
+    blob.upload_from_filename(source_file_path)
+
+    # Make public
+    blob.make_public()
+
+    print(f"Uploaded to {blob.public_url}")
+    return blob.public_url
+def delete_from_gcs(bucket_name, blob_name):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+
+    blob.delete()
+
+    print(f"Deleted {blob_name} from {bucket_name}")
+
 while True:
     cmd = input("cmd> ").strip().split()
     if not cmd:
@@ -73,21 +98,18 @@ while True:
         if not target_peer:
             print("No known ML peer found.")
             continue
-        print(cmd)
         if len(cmd) == 2:
             video_path = cmd[1]
-            # Load video file
+            # Upload video
             try:
-                with open(video_path, "rb") as f:
-                    video_data = f.read()
-            except FileNotFoundError:
-                print(f"Video file '{video_path}' not found.")
+                video_url = upload_video_to_bucket("drum-videos", video_path)
+            except FileNotFoundError as e:
+                print(f"Failed to upload video: {e}")
                 continue
 
-            encoded_video = base64.b64encode(video_data).decode("utf-8")
-            data_to_send = encoded_video
+            data_to_send = video_url
+            print(f"Sending video ML request to {target_peer}: {video_url}")
 
-            print(f"Sending video ML request to {target_peer}")
         else:
             data_to_send = "example-ml-data"
             print(f"Sending simple ML request to {target_peer}")
@@ -96,7 +118,9 @@ while True:
 
         for msgtype, msgdata in replies:
             if msgtype == "MLRS":
-                print(f"ML Result: {msgdata}")
+                ml_handlers.ml_response_handler(peer, msgdata)
+                # Delete from GCS using just the filename
+                delete_from_gcs("drum-videos", os.path.basename(video_path))
             else:
                 print(f"Unknown reply type: {msgtype}")
 

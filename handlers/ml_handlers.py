@@ -4,23 +4,28 @@ import cv2
 import requests
 import json
 from collections import defaultdict
+import urllib.request
+import os
 from datetime import timedelta
 
 def ml_request_handler(peer, conn, msgdata):
-    if len(msgdata) < 1000:
+    if not msgdata.startswith("http"):
         print(f"[{peer.myid}] Received simple ML request: {msgdata}")
         result = f"Processed ML Request({msgdata})"
         conn.senddata("MLRS", result)
         return
 
-    print(f"[{peer.myid}] Received video ML request")
-    video_bytes = base64.b64decode(msgdata)
+    # If msgdata is a URL (video url from GCS)
+    video_url = msgdata
+    print(f"[{peer.myid}] Received video ML request for URL: {video_url}")
 
+    # Download video from URL and save to a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-        tmp.write(video_bytes)
         tmp_path = tmp.name
+        print(f"[{peer.myid}] Downloading video to {tmp_path} ...")
+        urllib.request.urlretrieve(video_url, tmp_path)
 
-    print(f"[{peer.myid}] Saved video to {tmp_path}")
+    print(f"[{peer.myid}] Video downloaded to {tmp_path}")
 
     # Open video
     cap = cv2.VideoCapture(tmp_path)
@@ -37,6 +42,7 @@ def ml_request_handler(peer, conn, msgdata):
             break
 
         frame_number += 1
+        # print(f"Sent frame number: {frame_number}")
         current_second = int(frame_number // fps)
 
         # Encode frame as PNG bytes
@@ -46,7 +52,7 @@ def ml_request_handler(peer, conn, msgdata):
         # Send to inference API
         try:
             response = requests.post(
-                "http://34.57.54.56:8080/predict",
+                "http://35.222.49.126:8080/predict",
                 files={"file": ("frame.png", img_bytes, "image/png")},
                 timeout=10
             )
@@ -75,6 +81,10 @@ def ml_request_handler(peer, conn, msgdata):
     # Convert defaultdict to normal dict for JSON serialization
     for sec, hits in hits_per_second.items():
         result_data["per_second_hits"][str(sec)] = dict(hits)
+
+    if os.path.exists(tmp_path):
+        os.remove(tmp_path)
+        print(f"[{peer.myid}] Deleted temporary video at {tmp_path}")
 
     result_json = json.dumps(result_data)
 

@@ -2,6 +2,7 @@ import sys
 import threading
 from btpeer import BTPeer, BTPeerConnection
 from handlers import ml_handlers, iot_handlers, bc_handlers
+import base64
 
 # ---------------- create peer ----------------
 if len(sys.argv) != 4:
@@ -24,6 +25,9 @@ peer.add_router(direct_router)
 if peer.peertype == "IOT":
     peer.add_handler("IORQ", lambda conn, msgdata: iot_handlers.iot_request_handler(peer, conn, msgdata))
     threading.Thread(target=iot_handlers.start_aws_iot_listener, daemon=True).start()
+
+if peer.peertype == "ML":
+    peer.add_handler("MLRQ", lambda conn, msgdata: ml_handlers.ml_request_handler(peer, conn, msgdata))
 
 # Optional: Periodically print the list of live peers
 def heartbeat():
@@ -62,13 +66,39 @@ while True:
     elif cmd[0] == "heartbeat":
         peer.check_live_peers()
         print(f"### [{peer.myid}] known peers:", peer.get_peer_ids())
+
     elif cmd[0] == "request_ml":
+
         target_peer = get_peer_by_service("ML")
-        if target_peer:
-            print(f"Sending ML request to {target_peer}")
-            peer.send_to_peer(target_peer, "MLRQ", "example-ml-data", waitreply=True)
-        else:
+        if not target_peer:
             print("No known ML peer found.")
+            continue
+        print(cmd)
+        if len(cmd) == 2:
+            video_path = cmd[1]
+            # Load video file
+            try:
+                with open(video_path, "rb") as f:
+                    video_data = f.read()
+            except FileNotFoundError:
+                print(f"Video file '{video_path}' not found.")
+                continue
+
+            encoded_video = base64.b64encode(video_data).decode("utf-8")
+            data_to_send = encoded_video
+
+            print(f"Sending video ML request to {target_peer}")
+        else:
+            data_to_send = "example-ml-data"
+            print(f"Sending simple ML request to {target_peer}")
+
+        replies = peer.send_to_peer(target_peer, "MLRQ", data_to_send, waitreply=True)
+
+        for msgtype, msgdata in replies:
+            if msgtype == "MLRS":
+                print(f"ML Result: {msgdata}")
+            else:
+                print(f"Unknown reply type: {msgtype}")
 
     elif cmd[0] == "request_iot" and len(cmd) == 3:
         target_peer = get_peer_by_service("IOT")

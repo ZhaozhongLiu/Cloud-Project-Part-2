@@ -2,6 +2,10 @@ import sys
 import threading
 from btpeer import BTPeer, BTPeerConnection
 from handlers import ml_handlers, iot_handlers, bc_handlers
+import base64
+
+from google.cloud import storage
+import os
 
 # ---------------- create peer ----------------
 if len(sys.argv) != 4:
@@ -25,6 +29,9 @@ if peer.peertype == "IOT":
     peer.add_handler("IORQ", lambda conn, msgdata: iot_handlers.iot_request_handler(peer, conn, msgdata))
     threading.Thread(target=iot_handlers.start_aws_iot_listener, daemon=True).start()
 
+if peer.peertype == "ML":
+    peer.add_handler("MLRQ", lambda conn, msgdata: ml_handlers.ml_request_handler(peer, conn, msgdata))
+
 # Optional: Periodically print the list of live peers
 def heartbeat():
     peer.check_live_peers()
@@ -42,6 +49,28 @@ def get_peer_by_service(service_type):
         if ptype == service_type.upper():
             return pid
     return None
+
+def upload_video_to_bucket(bucket_name, source_file_path):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob_name = os.path.basename(source_file_path)
+    blob = bucket.blob(blob_name)
+
+    blob.upload_from_filename(source_file_path)
+
+    # Make public
+    blob.make_public()
+
+    print(f"Uploaded to {blob.public_url}")
+    return blob.public_url
+def delete_from_gcs(bucket_name, blob_name):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+
+    blob.delete()
+
+    print(f"Deleted {blob_name} from {bucket_name}")
 
 while True:
     cmd = input("cmd> ").strip().split()
@@ -62,13 +91,38 @@ while True:
     elif cmd[0] == "heartbeat":
         peer.check_live_peers()
         print(f"### [{peer.myid}] known peers:", peer.get_peer_ids())
+
     elif cmd[0] == "request_ml":
+
         target_peer = get_peer_by_service("ML")
-        if target_peer:
-            print(f"Sending ML request to {target_peer}")
-            peer.send_to_peer(target_peer, "MLRQ", "example-ml-data", waitreply=True)
-        else:
+        if not target_peer:
             print("No known ML peer found.")
+            continue
+        if len(cmd) == 2:
+            video_path = cmd[1]
+            # Upload video
+            try:
+                video_url = upload_video_to_bucket("drum-videos", video_path)
+            except FileNotFoundError as e:
+                print(f"Failed to upload video: {e}")
+                continue
+
+            data_to_send = video_url
+            print(f"Sending video ML request to {target_peer}: {video_url}")
+
+        else:
+            data_to_send = "example-ml-data"
+            print(f"Sending simple ML request to {target_peer}")
+
+        replies = peer.send_to_peer(target_peer, "MLRQ", data_to_send, waitreply=True)
+
+        for msgtype, msgdata in replies:
+            if msgtype == "MLRS":
+                ml_handlers.ml_response_handler(peer, msgdata)
+                # Delete from GCS using just the filename
+                delete_from_gcs("drum-videos", os.path.basename(video_path))
+            else:
+                print(f"Unknown reply type: {msgtype}")
 
     elif cmd[0] == "request_iot" and len(cmd) == 3:
         target_peer = get_peer_by_service("IOT")

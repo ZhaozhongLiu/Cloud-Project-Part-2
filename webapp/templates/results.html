@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Practice Session Results</title>
+</head>
+<body>
+    <h1>Practice Results</h1>
+
+    {% for sec, row in results.items() %}
+        <h3>Second {{ sec }}</h3>
+        <ul>
+            <li>Volume: {{ row.volume }}</li>
+            <li>Vibration: {{ row.vibration }}</li>
+            <li>Hits:
+                <ul>
+                    {% for drum, count in row.hits.items() %}
+                        <li>{{ drum }}: {{ count }}</li>
+                    {% endfor %}
+                </ul>
+            </li>
+            {% if row.warning %}
+                <li><strong>{{ row.warning }}</strong></li>
+            {% endif %}
+        </ul>
+    {% endfor %}
+</body>
+</html>

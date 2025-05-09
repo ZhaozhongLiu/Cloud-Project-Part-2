@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Drum Practice Upload</title>
+</head>
+<body>
+    <h1>Upload Practice Session</h1>
+    <form action="/submit" method="post" enctype="multipart/form-data">
+        <label for="start_time">Start Date and Time:</label><br>
+        <input type="datetime-local" id="start_time" name="start_time" required><br><br>
+
+        <label for="end_time">End Date and Time:</label><br>
+        <input type="datetime-local" id="end_time" name="end_time" required><br><br>
+
+        <label for="video">Upload Video:</label><br>
+        <input type="file" id="video" name="video" accept="video/*" required><br><br>
+
+        <input type="submit" value="Submit">
+    </form>
+</body>
+</html>

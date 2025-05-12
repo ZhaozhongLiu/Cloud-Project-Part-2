@@ -1,76 +1,116 @@
-# ---------- Python byte-code ----------
-__pycache__/
+-----------------------------
+
+Python Byte-compiled / C Extensions
+
+-----------------------------
+
+pycache/
 *.py[cod]
 *$py.class
 *.so
-*.pyo
 *.pyd
-*.pdb          # Windows debug symbols
 
-# ---------- Virtual environments ----------
+-----------------------------
+
+Virtual Environments
+
+-----------------------------
+
 .venv/
 venv/
 env/
 ENV/
 
-# ---------- Build & distribution artifacts ----------
+-----------------------------
+
+Build & Distribution
+
+-----------------------------
+
 build/
 dist/
 *.egg-info/
 .eggs/
-*.wheel
+*.whl
 pip-wheel-metadata/
 
-# ---------- Test & type-checking caches ----------
-.mypy_cache/
+-----------------------------
+
+Test & Type-checking Caches
+
+-----------------------------
+
+htmlcov/
+.coverage*
+.cache/
 .pytest_cache/
 .tox/
-.cache/
-.coverage
-.coverage.*
-htmlcov/
+.mypy_cache/
 
-# ---------- Logs & local runtime data ----------
+-----------------------------
+
+Logs & Runtime Data
+
+-----------------------------
+
 *.log
 logs/
 *.sqlite3
 *.db
 *.pid
 
-# ---------- Secrets / config ----------
+-----------------------------
+
+Secrets & Configuration
+
+-----------------------------
+
 .env
 .env.*
 *.pem
 *.key
 *.crt
+root-CA.crt
+vibration_sensor.cert.pem
+vibration_sensor.private.key
 
-# ---------- Editor / IDE settings ----------
+-----------------------------
+
+IDE & Editor Settings
+
+-----------------------------
+
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# ---------- OS-specific cruft ----------
+-----------------------------
+
+OS-specific Files
+
+-----------------------------
+
 .DS_Store
 Thumbs.db
+desktop.ini
 Icon?
 ehthumbs.db
-desktop.ini
 
-# ---------- Optional extras ----------
-# Unit-test output
-junit-*.xml
+-----------------------------
 
-# PyInstaller
-*.manifest
-*.spec
+Jupyter Notebooks
 
-# Jupyter notebooks
+-----------------------------
+
 .ipynb_checkpoints/
 
-# Local tool history (e.g., VS Code “Local History” extension)
-.history/
+-----------------------------
 
-root-CA.crt
-vibration_sensor.cert.pem
-vibration_sensor.private.key
+Custom / Project-specific
+
+-----------------------------
+
+howtouse.md
+handlers/bc_handler1.py
+

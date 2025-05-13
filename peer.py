@@ -1,7 +1,7 @@
 import sys
 import threading
 from btpeer import BTPeer, BTPeerConnection
-from handlers import ml_handlers, iot_handlers, bc_handlers
+from handlers import ml_handlers, iot_handlers
 import base64
 import time
 import logging
@@ -118,6 +118,11 @@ def direct_router(pid: str):
     return (pid, data["host"], data["port"])
 
 peer.add_router(direct_router)
+
+if peer.peertype == "BC":
+    from handlers import bc_handlers as _bc
+    peer.add_handler("BCRQ", lambda conn, msg: _bc.bc_request_handler(peer, conn, msg))
+    peer.add_handler("BCRS", lambda conn, msg: _bc.bc_response_handler(peer, msg))
 
 if peer.peertype == "IOT":
     peer.add_handler("IORQ", lambda conn, msgdata: iot_handlers.iot_request_handler(peer, conn, msgdata))
@@ -265,6 +270,25 @@ while True:
         else:
             print("No known IoT peer found.")
 
+    # ---- Blockchain ----
+    elif cmd[0] == "bc_store" and len(cmd) == 2:
+        payload = cmd[1]
+        # target = get_peer_by_service("BC") or peer.myid
+        target = find_peer_for_service("BC") or peer.myid
+        replies = peer.send_to_peer(target, "BCRQ", f"STORE {payload}", waitreply=True)
+        for msg_type, msg_data in replies:
+            if msg_type == "BCRS":
+                from handlers import bc_handlers as _bc
+                _bc.bc_response_handler(peer, msg_data)
+
+    elif cmd[0] == "bc_fetch":
+        # target = get_peer_by_service("BC") or peer.myid
+        target = find_peer_for_service("BC") or peer.myid
+        replies = peer.send_to_peer(target, "BCRQ", "FETCH", waitreply=True)
+        for msg_type, msg_data in replies:
+            if msg_type == "BCRS":
+                from handlers import bc_handlers as _bc
+                _bc.bc_response_handler(peer, msg_data)
     elif cmd[0] == "request_bc":
         # target_peer = get_peer_by_service("BC")
         target_peer = find_peer_for_service("BC")

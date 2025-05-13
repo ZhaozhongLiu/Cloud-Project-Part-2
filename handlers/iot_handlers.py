@@ -19,22 +19,35 @@ def iot_response_handler(peer, msgdata):
     except Exception as e:
         print(f"[{peer.myid}] Failed to parse IoT response: {msgdata} ({e})")
 
+from datetime import datetime, timezone
+
 def iot_request_handler(peer, conn, msgdata):
     print(f"[{peer.myid}] Received IoT request with time filter: {msgdata}")
     try:
         start_time_str, end_time_str = msgdata.split("|")
-        start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
-        end_time = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
 
-        filtered_data = [
-            entry for entry in iot_data_log
-            if start_time <= datetime.fromisoformat(entry['timestamp'].replace("Z", "+00:00")) <= end_time
-        ]
-        print(filtered_data)
-        response = json.dumps(filtered_data)
-        sent = conn.senddata("IORS", json.dumps(filtered_data))
+        # Assume user input is UTC and make both aware
+        start_time = datetime.fromisoformat(start_time_str).replace(tzinfo=timezone.utc)
+        end_time = datetime.fromisoformat(end_time_str).replace(tzinfo=timezone.utc)
+
+        filtered_data = []
+        for entry in iot_data_log:
+            try:
+                # Make sure entry timestamp is also aware
+                entry_time = datetime.fromisoformat(entry['timestamp'].replace("Z", "+00:00"))
+
+                if start_time <= entry_time <= end_time:
+                    filtered_data.append(entry)
+            except Exception as parse_err:
+                print(f"[{peer.myid}] Skipping malformed timestamp: {entry['timestamp']} ({parse_err})")
+                continue
+
+        print(f"[{peer.myid}] Filtered {len(filtered_data)} entries")
+        conn.senddata("IORS", json.dumps(filtered_data))
+
     except Exception as e:
         conn.senddata("IORS", json.dumps({"error": f"Invalid request format: {str(e)}"}))
+
 
 def on_connect(client, userdata, flags, rc):
     result, mid = client.subscribe("drumkit/vibration", qos=1)

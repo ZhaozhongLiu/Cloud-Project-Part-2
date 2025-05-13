@@ -179,12 +179,53 @@ while True:
                 _bc.bc_response_handler(peer, msg_data)
 
     # ---- ML example ----
-    elif op == "request_ml":
-        ...  # Preserve original ML logic
+    elif op[0] == "request_ml":
+
+        target_peer = get_peer_by_service("ML")
+        if not target_peer:
+            print("No known ML peer found.")
+            continue
+        if len(op) == 2:
+            video_path = op[1]
+            # Upload video
+            try:
+                video_url = upload_video_to_bucket("drum-videos", video_path)
+            except FileNotFoundError as e:
+                print(f"Failed to upload video: {e}")
+                continue
+
+            data_to_send = video_url
+            print(f"Sending video ML request to {target_peer}: {video_url}")
+
+        else:
+            data_to_send = "example-ml-data"
+            print(f"Sending simple ML request to {target_peer}")
+
+        replies = peer.send_to_peer(target_peer, "MLRQ", data_to_send, waitreply=True)
+
+        for msgtype, msgdata in replies:
+            if msgtype == "MLRS":
+                ml_handlers.ml_response_handler(peer, msgdata)
+                # Delete from GCS using just the filename
+                delete_from_gcs("drum-videos", os.path.basename(video_path))
+            else:
+                print(f"Unknown reply type: {msgtype}")
+
 
     # ---- IoT example ----
-    elif op == "request_iot":
-        ...  # Preserve original IoT logic
+    elif op[0] == "request_iot" and len(op) == 3:
+        target_peer = get_peer_by_service("IOT")
+        if target_peer:
+            time_range = f"{op[1]}|{op[2]}"
+            print(f"Requesting IoT data from {target_peer} for {time_range}")
+            replies = peer.send_to_peer(target_peer, "IORQ", time_range, waitreply=True)
+            for msgtype, msgdata in replies:
+                if msgtype == "IORS":
+                    iot_handlers.iot_response_handler(peer, msgdata)
+                else:
+                    print(f"Unknown reply type: {msgtype}")
+        else:
+            print("No known IoT peer found.")
 
     elif op == "help":
         print(HELP)

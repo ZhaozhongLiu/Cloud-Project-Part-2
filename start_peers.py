@@ -88,8 +88,8 @@ def main():
     ml_node.stdin.write(b"add IOTNode localhost 6001 IOT\n")
     ml_node.stdin.flush()
 
-    iot_node.stdin.write(b"add MLNode localhost 6000 ML\n")
-    iot_node.stdin.flush()
+    # iot_node.stdin.write(b"add MLNode localhost 6000 ML\n")
+    # iot_node.stdin.flush()
 
 
 

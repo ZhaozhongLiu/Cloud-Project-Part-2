@@ -27,7 +27,7 @@ port, maxpeers, peertype = sys.argv[1], sys.argv[2], sys.argv[3]
 peer = BTPeer(maxpeers=int(maxpeers), serverport=int(port), peertype=peertype.upper())
 
 # --------------- Kademlia setup ---------------
-# run the Kademlia node on port = your peer port + 10000 (or any free port)
+# run the Kademlia node on port = peer port + 10000
 KAD_PORT = peer.serverport + 10000
 kad_loop = asyncio.new_event_loop()
 asyncio.set_event_loop(kad_loop)
@@ -36,8 +36,6 @@ kad = KadServer()
 
 async def start_kademlia():
     await kad.listen(KAD_PORT)
-    # bootstrap from any known peer (you can use your static peers for now)
-    # format: ("host", kad_port)
     bootstrap_nodes = [(BOOTSTRAP_NODE[0], BOOTSTRAP_NODE[1] + 10000)]
     if (peer.serverhost, peer.serverport) != BOOTSTRAP_NODE:
         await kad.bootstrap([(BOOTSTRAP_NODE[0], BOOTSTRAP_NODE[1] + 10000)])
@@ -53,7 +51,6 @@ def announce_service(pid, ptype):
     """
     key = f"svc:{ptype.upper()}"
     async def _update():
-        # fetch existing (might be None or JSON list)
         raw = await kad.get(key)
         lst = json.loads(raw) if raw else []
         if pid not in lst:
@@ -61,14 +58,14 @@ def announce_service(pid, ptype):
             await kad.set(key, json.dumps(lst))
     asyncio.run_coroutine_threadsafe(_update(), kad_loop)
 def add_and_announce(pid, host, port, ptype):
-    # 1) add into your BT peer table
+    # add into your BT peer table
     peer.add_peer(pid, host, port, ptype)
 
-    # 2) tell the DHT about them
+    # tell the DHT about them
     info = json.dumps({"host": host, "port": port, "type": ptype})
     asyncio.run_coroutine_threadsafe(kad.set(pid, info), kad_loop)
 
-    # 3) bootstrap off of them so they enter your routing table
+    # bootstrap off of them so they enter routing table
     bootstrap_node = (host, port + 10000)
     asyncio.run_coroutine_threadsafe(kad.bootstrap([bootstrap_node]), kad_loop)
     announce_service(pid, ptype)
@@ -97,7 +94,7 @@ announce_service(peer.myid, peer.peertype)
 #         return (None, None, None)
 
 def direct_router(pid: str):
-    # first, try local cache:
+    # try local cache:
     if pid in peer.peers:
         h, p, t = peer.peers[pid]
         return (pid, h, p)
@@ -150,7 +147,7 @@ t.start()
 #     return None
 
 def find_peer_for_service(service_type: str, timeout=5):
-    # 1) fetch the list of IDs for that service
+    # fetch the list of IDs for that service
     key = f"svc:{service_type.upper()}"
     future = asyncio.run_coroutine_threadsafe(kad.get(key), kad_loop)
     try:
@@ -164,10 +161,10 @@ def find_peer_for_service(service_type: str, timeout=5):
     if not ids:
         return None
 
-    # 2) pick one at random (or first)
+    # pick first
     target_id = ids[0]
 
-    # 3) resolve its contact info via your DHT-backed direct_router
+    # resolve its contact info using direct_router
     pid, host, port = direct_router(target_id)
     if pid is None:
         return None
@@ -289,13 +286,5 @@ while True:
             if msg_type == "BCRS":
                 from handlers import bc_handlers as _bc
                 _bc.bc_response_handler(peer, msg_data)
-    elif cmd[0] == "request_bc":
-        # target_peer = get_peer_by_service("BC")
-        target_peer = find_peer_for_service("BC")
-        if target_peer:
-            print(f"Sending Blockchain request to {target_peer}")
-            peer.send_to_peer(target_peer, "BCRQ", "example-bc-data", waitreply=True)
-        else:
-            print("No known Blockchain peer found.")
     else:
         print("Commands: add <peerid> <host> <port> <peertype> | ping <peerid> | list | quit")

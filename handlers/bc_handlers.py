@@ -19,6 +19,7 @@ from typing import Any, List
 from dotenv import load_dotenv
 from web3 import Web3
 from web3.contract import Contract
+import pathlib
 
 # Load environment variables
 load_dotenv()
@@ -63,7 +64,11 @@ else:
 
 ADDRESS_FILE = pathlib.Path("stringchain.addr")
 if not ADDRESS_FILE.exists():
-    raise FileNotFoundError("stringchain.addr not found. Deploy the contract first.")
+    fallback_path = pathlib.Path(__file__).resolve().parent.parent / "stringchain.addr"
+    if fallback_path.exists():
+        ADDRESS_FILE = fallback_path
+    else:
+        raise FileNotFoundError("stringchain.addr not found in current directory or fallback path. Deploy the contract first.")
 
 CONTRACT_ADDRESS = ADDRESS_FILE.read_text().strip()
 contract: Contract = w3.eth.contract(address=CONTRACT_ADDRESS, abi=abi)

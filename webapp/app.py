@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, make_response
 import os
 from google.cloud import storage
 import threading
@@ -7,10 +7,27 @@ from btpeer import BTPeer
 import base64
 from datetime import datetime, timezone
 from collections import defaultdict
+from bt_utils import init_dht, direct_router_factory, request_ml, request_iot, bc_store, bc_fetch, find_peer_for_service
 import json
+import uuid
+import socket
+import random
 
 app = Flask(__name__)
 BUCKET_NAME = "drum-videos"
+
+def get_available_port(max_port=20000, attempts=100):
+    for _ in range(attempts):
+        port = random.randint(1024, max_port)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('', port))
+                s.listen(1)
+                print(f"[DEBUG] Allocated port: {port}")
+                return port
+            except OSError:
+                continue
+    raise RuntimeError(f"Could not find a free port under {max_port} after {attempts} attempts.")
 
 # --------------------- Upload to GCS --------------------
 def upload_video_to_bucket(bucket_name, source_file_path):
@@ -87,46 +104,62 @@ def combine_and_analyze(iot_data, ml_data):
 
     return combined_result
 
+def start_peer(start_time, end_time, video_path, result_id):
+    peer_port = get_available_port()
+    peer_type = random.choice(["BC", "IOT", "ML"])
+    peer = BTPeer(maxpeers=5, serverport=peer_port, peertype=peer_type)
 
-
-# --------------------- Peer Client --------------------
-def start_peer(start_time, end_time, video_path):
-    peer = BTPeer(maxpeers=5, serverport=0, peertype="WEB")  # random port
-    peer.add_router(lambda pid: (pid, "localhost", 6000 if pid == "MLNode" else 6001))
+    # Initialize Kademlia DHT and router
+    kad, loop = init_dht(peer)
+    peer.add_router(direct_router_factory(peer, kad, loop))
 
     def run():
         t = threading.Thread(target=peer.mainloop, daemon=True)
         t.start()
 
-        # Upload video
+        # Upload video to GCS
         video_url = upload_video_to_bucket(BUCKET_NAME, video_path)
 
-        # ML Request
-        print("[WEB PEER] Sending ML request...")
-        ml_replies = peer.send_to_peer("MLNode", "MLRQ", video_url, waitreply=True)
-        ml_data = None
-        for msgtype, msgdata in ml_replies:
-            if msgtype == "MLRS":
-                print("[WEB PEER] ML Results:", msgdata)
-                ml_data = json.loads(msgdata)
+        # --- Request ML ---
+        try:
+            ml_data = request_ml(peer, kad, loop, BUCKET_NAME, video_path)
+            print("[WEB PEER] ML Results:", ml_data)
+        except Exception as e:
+            print(f"[WEB PEER] ML request failed: {e}")
+            return
 
-        # IoT Request
-        time_range = f"{start_time}|{end_time}"
-        print("[WEB PEER] Sending IoT request...")
-        iot_replies = peer.send_to_peer("Test", "IORQ", time_range, waitreply=True)
-        iot_data = None
-        for msgtype, msgdata in iot_replies:
-            if msgtype == "IORS":
-                print("[WEB PEER] IoT Results:", msgdata)
-                iot_data = json.loads(msgdata)
+        # --- Request IoT ---
+        try:
+            iot_data = request_iot(peer, kad, loop, start_time, end_time)
+            print("[WEB PEER] IoT Results:", iot_data)
+        except Exception as e:
+            print(f"[WEB PEER] IoT request failed: {e}")
+            return
 
+        # --- Combine and Analyze ---
         if ml_data and iot_data:
             combined_data = combine_and_analyze(iot_data, ml_data)
 
-            with open("combined_results.json", "w") as f:
+            os.makedirs("results", exist_ok=True)
+            with open(f"results/{result_id}.json", "w") as f:
                 json.dump(combined_data, f, indent=2)
-            print("Combined results saved to combined_results.json")
+            print(f"Combined results saved to results/{result_id}.json")
+
+            # --- Store in Blockchain ---
+            try:
+                bc_result = bc_store(peer, kad, loop, combined_data)
+                print("[WEB PEER] Blockchain response:", bc_result)
+            except Exception as e:
+                print(f"[WEB PEER] Blockchain store failed: {e}")
+
+            try:
+                bc_chain = bc_fetch(peer, kad, loop)
+                print("[WEB PEER] Blockchain fetch:", bc_chain)
+            except Exception as e:
+                print(f"[WEB PEER] Blockchain fetch failed: {e}")
+
         peer.shutdown = True
+        loop.call_soon_threadsafe(loop.stop)
 
     threading.Thread(target=run).start()
 
@@ -148,17 +181,24 @@ def submit():
     os.makedirs("uploads", exist_ok=True)
     video.save(save_path)
 
-    # Start peer client
-    start_peer(start_time, end_time, save_path)
+    result_id = str(uuid.uuid4())
+    start_peer(start_time, end_time, save_path, result_id)
 
-    return "Request sent to ML and IoT peers! <a href='/results'>Check Results</a> (refresh this page in a moment)"
+    resp = make_response(render_template("submitted.html"))
+    resp.set_cookie("result_id", result_id)
+    return resp
 
 @app.route("/results")
 def results():
-    if not os.path.exists("combined_results.json"):
+    result_id = request.cookies.get("result_id")
+    if not result_id:
+        return "No result ID found. Please upload a session first."
+
+    result_path = f"results/{result_id}.json"
+    if not os.path.exists(result_path):
         return "Results not ready yet. Please wait and refresh."
 
-    with open("combined_results.json", "r") as f:
+    with open(result_path, "r") as f:
         combined_data = json.load(f)
 
     return render_template("results.html", results=combined_data)

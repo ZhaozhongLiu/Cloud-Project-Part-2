@@ -2,26 +2,31 @@
 <html>
 <head>
     <title>Practice Session Results</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1>Practice Results</h1>
-
-    {% for sec, row in results.items() %}
-        <h3>Second {{ sec }}</h3>
-        <ul>
-            <li>Volume: {{ row.volume }}</li>
-            <li>Vibration: {{ row.vibration }}</li>
-            <li>Hits:
+    <div class="container">
+        <h1>Practice Results</h1>
+        <a href="/" class="button">Home</a>
+        {% for sec, row in results.items() %}
+            <div class="result-block">
+                <h3>Second {{ sec }}</h3>
                 <ul>
-                    {% for drum, count in row.hits.items() %}
-                        <li>{{ drum }}: {{ count }}</li>
-                    {% endfor %}
+                    <li><strong>Volume:</strong> {{ row.volume }}</li>
+                    <li><strong>Vibration:</strong> {{ row.vibration }}</li>
+                    <li><strong>Hits:</strong>
+                        <ul>
+                            {% for drum, count in row.hits.items() %}
+                                <li>{{ drum }}: {{ count }}</li>
+                            {% endfor %}
+                        </ul>
+                    </li>
+                    {% if row.warning %}
+                        <li class="warning">{{ row.warning }}</li>
+                    {% endif %}
                 </ul>
-            </li>
-            {% if row.warning %}
-                <li><strong>{{ row.warning }}</strong></li>
-            {% endif %}
-        </ul>
-    {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
 </body>
 </html>

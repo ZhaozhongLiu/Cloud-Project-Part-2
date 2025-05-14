@@ -140,11 +140,6 @@ t = threading.Thread(target=peer.mainloop, daemon=True)
 t.start()
 
 # ---------------- Simple CLI ----------------
-# def get_peer_by_service(service_type):
-#     for pid, (host, port, ptype) in peer.peers.items():
-#         if ptype == service_type.upper():
-#             return pid
-#     return None
 
 def find_peer_for_service(service_type: str, timeout=5):
     # fetch the list of IDs for that service

@@ -106,7 +106,8 @@ def combine_and_analyze(iot_data, ml_data):
 
 def start_peer(start_time, end_time, video_path, result_id):
     peer_port = get_available_port()
-    peer = BTPeer(maxpeers=5, serverport=peer_port, peertype="WEB")
+    peer_type = random.choice(["BC", "IOT", "ML"])
+    peer = BTPeer(maxpeers=5, serverport=peer_port, peertype=peer_type)
 
     # Initialize Kademlia DHT and router
     kad, loop = init_dht(peer)

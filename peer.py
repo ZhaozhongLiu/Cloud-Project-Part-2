@@ -5,9 +5,9 @@ from handlers import ml_handlers, iot_handlers
 import base64
 import time
 import logging
-log = logging.getLogger("kademlia")
-log.setLevel(logging.DEBUG)
-log.addHandler(logging.StreamHandler())
+# log = logging.getLogger("kademlia")
+# log.setLevel(logging.DEBUG)
+# log.addHandler(logging.StreamHandler())
 
 import asyncio, json
 from kademlia.network import Server as KadServer

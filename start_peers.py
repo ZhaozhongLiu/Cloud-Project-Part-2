@@ -121,9 +121,6 @@ def main():
     # iot_node.stdin.write(b"add MLNode localhost 6000 ML\n")
     # iot_node.stdin.flush()
 
-
-
-
     print("[Starter] Peers registered. System ready.")
 
     try:

@@ -159,10 +159,6 @@ def find_peer_for_service(service_type: str, timeout=5):
     # pick first
     target_id = ids[0]
 
-    # resolve its contact info using direct_router
-    pid, host, port = direct_router(target_id)
-    if pid is None:
-        return None
     return pid
 
 

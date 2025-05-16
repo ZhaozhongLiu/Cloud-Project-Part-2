@@ -52,7 +52,7 @@ def ml_request_handler(peer, conn, msgdata):
         # Send to inference API
         try:
             response = requests.post(
-                "http://34.172.223.90:8080/predict",
+                "http://34.29.29.124:8080/predict",
                 files={"file": ("frame.png", img_bytes, "image/png")},
                 timeout=10
             )
